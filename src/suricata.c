@@ -433,6 +433,7 @@ static int SetBpfString(int optind, char *argv[])
     if(strlen(bpf_filter) > 0) {
         if (ConfSetFinal("bpf-filter", bpf_filter) != 1) {
             SCLogError(SC_ERR_FATAL, "Failed to set bpf filter.");
+            SCFree(bpf_filter);
             return TM_ECODE_FAILED;
         }
     }
@@ -779,8 +780,19 @@ void SCPrintBuildInfo(void)
 #if __SSP_ALL__ == 2
     printf("compiled with -fstack-protector-all\n");
 #endif
-#ifdef _FORTIFY_SOURCE
-    printf("compiled with _FORTIFY_SOURCE=%d\n", _FORTIFY_SOURCE);
+/*
+ * Workaround for special defines of _FORTIFY_SOURCE like
+ * FORTIFY_SOURCE=((defined __OPTIMIZE && OPTIMIZE > 0) ? 2 : 0)
+ * which is used by Gentoo for example and would result in the error
+ * 'defined' undeclared when _FORTIFY_SOURCE used via %d in printf func
+ *
+ */
+#if _FORTIFY_SOURCE == 2
+    printf("compiled with _FORTIFY_SOURCE=2\n");
+#elif _FORTIFY_SOURCE == 1
+    printf("compiled with _FORTIFY_SOURCE=1\n");
+#elif _FORTIFY_SOURCE == 0
+    printf("compiled with _FORTIFY_SOURCE=0\n");
 #endif
 #ifdef CLS
     printf("L1 cache line size (CLS)=%d\n", CLS);

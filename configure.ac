@@ -57,7 +57,7 @@
 
     case "$compiler" in
         clang)
-            CLANG_CFLAGS="-Wextra -Werror-implicit-function-declaration"
+            CLANG_CFLAGS="-Wextra -Werror-implicit-function-declaration -Wno-error=unused-command-line-argument"
             AC_MSG_CHECKING([clang __sync_bool_compare_and_swap support])
             AC_TRY_COMPILE([#include <stdio.h>],
                 [ unsigned int i = 0; (void)__sync_bool_compare_and_swap(&i, 1, 1);],
@@ -470,13 +470,27 @@
         LDFLAGS="${LDFLAGS} -L${with_libpcre_libraries}"
     fi
     PCRE=""
-    AC_CHECK_LIB(pcre, pcre_get_substring,, PCRE="no",-lpthread)
+    AC_CHECK_LIB(pcre, pcre_get_substring,, PCRE="no")
     if test "$PCRE" = "no"; then
         echo
         echo "   ERROR!  pcre library not found, go get it"
         echo "   from www.pcre.org."
         echo
         exit 1
+    fi
+
+    # libpcre 8.35 (especially on debian) has a known issue that results in segfaults
+    # see https://redmine.openinfosecfoundation.org/issues/1693
+    PKG_CHECK_MODULES(LIBPCREVERSION, [libpcre = 8.35],[libpcre_buggy_found="yes"],[libprce_buggy_found="no"])
+    if test "$libpcre_buggy_found" = "yes"; then
+        echo
+        echo "   Warning! vulnerable libpcre version 8.35 found"
+        echo "   This version has a known issue that could result in segfaults"
+        echo "   please upgrade to a newer version of pcre which you can get from"
+        echo "   www.pcre.org. For more information, see issue #1693"
+        echo
+        echo "   Continuing for now with JIT disabled..."
+        echo
     fi
 
     # To prevent duping the lib link we reset LIBS after this check. Setting action-if-found to NULL doesn't seem to work
@@ -525,6 +539,11 @@
         ],
         [ pcre_jit_available=yes ], [ pcre_jit_available=no ]
         )
+
+    # bug 1693, libpcre 8.35 is broken and debian jessie is still using that
+    if test "$libpcre_buggy_found" = "yes"; then
+        pcre_jit_available="no, libpcre 8.35 blacklisted"
+    fi
 
     if test "x$pcre_jit_available" = "xyes"; then
        AC_MSG_RESULT(yes)
@@ -978,7 +997,7 @@
     AC_CHECK_HEADERS([pcap.h pcap/pcap.h pcap/bpf.h])
 
     LIBPCAP=""
-    AC_CHECK_LIB(pcap, pcap_open_live,, LIBPCAP="no", [-lpthread])
+    AC_CHECK_LIB(pcap, pcap_open_live,, LIBPCAP="no")
     if test "$LIBPCAP" = "no"; then
         echo
         echo "   ERROR!  libpcap library not found, go get it"
@@ -1581,8 +1600,14 @@
                 LDFLAGS="${LDFLAGS} ${LUA_LIBS}"
             fi
 
-            AC_DEFINE([HAVE_LUA],[1],[liblua available])
-            enable_lua="yes"
+            if test "$LUA" = "no"; then
+                AC_CHECK_LIB(lua, luaL_openlibs,, LUA="no")
+            fi
+
+            if test "$LUA" = "yes"; then
+                AC_DEFINE([HAVE_LUA],[1],[liblua available])
+                enable_lua="yes"
+            fi
         else
 	        echo
                 echo "   ERROR!  liblua headers not found, go get them"

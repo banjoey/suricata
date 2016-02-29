@@ -65,7 +65,6 @@
 #include "stream-tcp-reassemble.h"
 
 #ifdef HAVE_LIBJANSSON
-#include <jansson.h>
 
 typedef struct OutputFileCtx_ {
     LogFileCtx *file_ctx;
@@ -83,14 +82,13 @@ typedef struct JsonFileLogThread_ {
  */
 static void FileWriteJsonRecord(JsonFileLogThread *aft, const Packet *p, const File *ff)
 {
-    MemBuffer *buffer = (MemBuffer *)aft->buffer;
     json_t *js = CreateJSONHeader((Packet *)p, 0, "fileinfo"); //TODO const
     json_t *hjs = NULL;
     if (unlikely(js == NULL))
         return;
 
     /* reset */
-    MemBufferReset(buffer);
+    MemBufferReset(aft->buffer);
 
     switch (p->flow->alproto) {
         case ALPROTO_HTTP:
@@ -158,7 +156,7 @@ static void FileWriteJsonRecord(JsonFileLogThread *aft, const Packet *p, const F
 
     /* originally just 'file', but due to bug 1127 naming it fileinfo */
     json_object_set_new(js, "fileinfo", fjs);
-    OutputJSONBuffer(js, aft->filelog_ctx->file_ctx, buffer);
+    OutputJSONBuffer(js, aft->filelog_ctx->file_ctx, &aft->buffer);
     json_object_del(js, "fileinfo");
 
     switch (p->flow->alproto) {
